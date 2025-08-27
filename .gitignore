@@ -1,0 +1,9 @@
+# dependencies
+**/node_modules/
+
+# env
+*.env
+**/.env
+
+# local uploads
+mock-me-backend/uploads/
