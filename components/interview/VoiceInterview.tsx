@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Mic, Square, Volume2, X } from 'lucide-react';
 
-const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
+const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3000';
 
 interface VoiceInterviewProps {
   interviewId: number;
@@ -73,6 +73,21 @@ const VoiceInterview: React.FC<VoiceInterviewProps> = ({ interviewId, onComplete
     };
   }, [isRecording]);
 
+  const speakWithBrowserTTS = async (text: string): Promise<void> => {
+    return new Promise((resolve) => {
+      try {
+        const synth = window.speechSynthesis;
+        if (!synth) return resolve();
+        const utter = new SpeechSynthesisUtterance(text);
+        utter.onend = () => resolve();
+        utter.onerror = () => resolve();
+        synth.speak(utter);
+      } catch {
+        resolve();
+      }
+    });
+  };
+
   const startInterview = async () => {
     try {
       setLoading(true);
@@ -97,12 +112,19 @@ const VoiceInterview: React.FC<VoiceInterviewProps> = ({ interviewId, onComplete
       const sessionData: VoiceSession = await response.json();
       setSession(sessionData);
       
-      // CHANGED: Try to play greeting, but continue even if it fails
-      try {
-        await playAudio(`${backendUrl}${sessionData.greetingAudio}`);
-      } catch (audioError) {
-        console.warn('Greeting audio failed to play, but continuing:', audioError);
-        // Don't throw error - continue to questions even if audio fails
+      // Ensure greeting plays before proceeding. Fallback to browser TTS if audio missing or blocked
+      const greetUrl = sessionData.greetingAudio ? `${backendUrl}${sessionData.greetingAudio}` : '';
+      let greeted = false;
+      if (greetUrl) {
+        try {
+          await playAudio(greetUrl);
+          greeted = true;
+        } catch (audioError) {
+          console.warn('Greeting audio failed to play, trying browser TTS:', audioError);
+        }
+      }
+      if (!greeted) {
+        await speakWithBrowserTTS(sessionData.greetingMessage);
       }
       
       // Get first question
@@ -135,12 +157,19 @@ const VoiceInterview: React.FC<VoiceInterviewProps> = ({ interviewId, onComplete
       const questionData: Question = await response.json();
       setCurrentQuestion(questionData);
       
-      // CHANGED: Try to play question audio, but continue even if it fails
-      try {
-        await playAudio(`${backendUrl}${questionData.questionAudio}`);
-      } catch (audioError) {
-        console.warn('Question audio failed to play, but continuing:', audioError);
-        // Continue - user can still read the question and record answer
+      // Try to play question audio; fallback to browser TTS if missing or blocked
+      const qUrl = questionData.questionAudio ? `${backendUrl}${questionData.questionAudio}` : '';
+      let spoken = false;
+      if (qUrl) {
+        try {
+          await playAudio(qUrl);
+          spoken = true;
+        } catch (audioError) {
+          console.warn('Question audio failed to play, trying browser TTS:', audioError);
+        }
+      }
+      if (!spoken) {
+        await speakWithBrowserTTS(questionData.question);
       }
     } catch (err) {
       setError('Failed to get next question');
@@ -282,11 +311,19 @@ const VoiceInterview: React.FC<VoiceInterviewProps> = ({ interviewId, onComplete
 
       const result = await response.json();
       
-      // Try to play farewell audio, but don't block completion
-      try {
-        await playAudio(`${backendUrl}${result.farewellAudio}`);
-      } catch (audioError) {
-        console.warn('Farewell audio failed, continuing to complete:', audioError);
+      // Try to play farewell audio; fallback to browser TTS with the message
+      const farewellUrl = result.farewellAudio ? `${backendUrl}${result.farewellAudio}` : '';
+      let spoken = false;
+      if (farewellUrl) {
+        try {
+          await playAudio(farewellUrl);
+          spoken = true;
+        } catch (audioError) {
+          console.warn('Farewell audio failed, trying browser TTS:', audioError);
+        }
+      }
+      if (!spoken && result?.message) {
+        await speakWithBrowserTTS(result.message);
       }
       
       console.log('VoiceInterview: calling onComplete callback');
