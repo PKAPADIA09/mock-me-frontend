@@ -113,7 +113,9 @@ const VoiceInterview: React.FC<VoiceInterviewProps> = ({ interviewId, onComplete
       setSession(sessionData);
       
       // Ensure greeting plays before proceeding. Fallback to browser TTS if audio missing or blocked
-      const greetUrl = sessionData.greetingAudio ? `${backendUrl}${sessionData.greetingAudio}` : '';
+      const greetUrl = sessionData.greetingAudio
+        ? (sessionData.greetingAudio.startsWith('http') ? sessionData.greetingAudio : `${backendUrl}${sessionData.greetingAudio}`)
+        : '';
       let greeted = false;
       if (greetUrl) {
         try {
@@ -158,7 +160,9 @@ const VoiceInterview: React.FC<VoiceInterviewProps> = ({ interviewId, onComplete
       setCurrentQuestion(questionData);
       
       // Try to play question audio; fallback to browser TTS if missing or blocked
-      const qUrl = questionData.questionAudio ? `${backendUrl}${questionData.questionAudio}` : '';
+      const qUrl = questionData.questionAudio
+        ? (questionData.questionAudio.startsWith('http') ? questionData.questionAudio : `${backendUrl}${questionData.questionAudio}`)
+        : '';
       let spoken = false;
       if (qUrl) {
         try {
